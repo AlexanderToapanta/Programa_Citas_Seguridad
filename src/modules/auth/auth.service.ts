@@ -45,6 +45,15 @@ export class AuthService {
       throw new BadRequestException('Ya existe un usuario registrado con esta cédula o correo electrónico');
     }
 
+    // 2.1 Validar rango de edad: minimo 7 dias y maximo 100 anos
+    const birth = new Date(dto.birthDate);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const hundredYearsAgo = new Date(now.getFullYear() - 100, now.getMonth(), now.getDate());
+    if (isNaN(birth.getTime()) || birth > sevenDaysAgo || birth < hundredYearsAgo) {
+      throw new BadRequestException('La fecha de nacimiento debe corresponder a una persona con al menos 1 semana de vida y máximo 100 años');
+    }
+
     // 3. Validar con servicio institucional del IESS (RF08)
     const affiliation = await this.iessService.validateAffiliateStatus(dto.idCard);
     if (!affiliation.isAffiliated) {

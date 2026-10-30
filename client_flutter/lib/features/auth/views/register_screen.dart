@@ -61,11 +61,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _pickBirthDate() async {
     final now = DateTime.now();
+    // Rango permitido: entre 7 días de vida (mínimo 1 semana) y 100 años
+    final maxBirthDate = now.subtract(const Duration(days: 7));
+    final minBirthDate = DateTime(now.year - 100, now.month, now.day);
+    final initial = _selectedBirthDate != null
+        ? (_selectedBirthDate!.isAfter(maxBirthDate) ? maxBirthDate : (_selectedBirthDate!.isBefore(minBirthDate) ? minBirthDate : _selectedBirthDate!))
+        : DateTime(now.year - 25, 1, 1);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedBirthDate ?? DateTime(now.year - 25, 1, 1),
-      firstDate: DateTime(1900),
-      lastDate: now,
+      initialDate: initial,
+      firstDate: minBirthDate,
+      lastDate: maxBirthDate,
       locale: const Locale('es'),
       helpText: 'Seleccionar fecha de nacimiento',
       cancelText: 'Cancelar',
