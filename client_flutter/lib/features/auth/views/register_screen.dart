@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:iess_turnos_app/app/theme/app_theme.dart';
 import '../viewmodels/auth_viewmodel.dart';
 
@@ -19,6 +20,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
 
+  DateTime? _selectedBirthDate;
+
   @override
   void dispose() {
     _idCardController.dispose();
@@ -27,6 +30,54 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _emailController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  // Validación local del algoritmo de cédula ecuatoriana (Módulo 10)
+  bool _isValidEcuadorianIdCard(String idCard) {
+    if (idCard.length != 10 || !RegExp(r'^\d{10}$').hasMatch(idCard)) {
+      return false;
+    }
+    final province = int.tryParse(idCard.substring(0, 2)) ?? 0;
+    if ((province < 1 || province > 24) && province != 30) {
+      return false;
+    }
+    final thirdDigit = int.tryParse(idCard.substring(2, 3)) ?? -1;
+    if (thirdDigit < 0 || thirdDigit > 5) {
+      return false; // Personas naturales
+    }
+    const coefficients = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+    int sum = 0;
+    for (int i = 0; i < 9; i++) {
+      int val = (int.tryParse(idCard[i]) ?? 0) * coefficients[i];
+      if (val >= 10) val -= 9;
+      sum += val;
+    }
+    final verifier = int.tryParse(idCard[9]) ?? -1;
+    final nextTen = ((sum + 9) ~/ 10) * 10;
+    int computed = nextTen - sum;
+    if (computed == 10) computed = 0;
+    return computed == verifier;
+  }
+
+  Future<void> _pickBirthDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedBirthDate ?? DateTime(now.year - 25, 1, 1),
+      firstDate: DateTime(1900),
+      lastDate: now,
+      locale: const Locale('es'),
+      helpText: 'Seleccionar fecha de nacimiento',
+      cancelText: 'Cancelar',
+      confirmText: 'Aceptar',
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedBirthDate = picked;
+        _birthDateController.text = DateFormat('yyyy-MM-dd').format(picked);
+      });
+    }
   }
 
   void _submit() async {
@@ -113,6 +164,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       const SizedBox(height: 20),
 
+                      // Mensaje de Error del Servidor mostrado en la misma pantalla
                       if (authState.errorMessage != null)
                         Container(
                           margin: const EdgeInsets.only(bottom: 16),
@@ -122,12 +174,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             border: Border.all(color: Colors.red.shade200),
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Text(
-                            authState.errorMessage!,
-                            style: const TextStyle(
-                              color: AppTheme.errorRed,
-                              fontSize: 13,
-                            ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: AppTheme.errorRed, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  authState.errorMessage!,
+                                  style: const TextStyle(
+                                    color: AppTheme.errorRed,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
 
@@ -144,7 +205,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.trim().length != 10) {
-                            return 'La cédula debe tener exactamente 10 dígitos';
+                            return 'Ingrese una cédula válida';
+                          }
+                          if (!_isValidEcuadorianIdCard(value.trim())) {
+                            return 'Ingrese una cédula válida';
                           }
                           return null;
                         },
@@ -167,20 +231,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       ),
                       const SizedBox(height: 14),
 
-                      // Fecha de Nacimiento
+                      // Fecha de Nacimiento con Calendario
                       TextFormField(
                         controller: _birthDateController,
-                        decoration: const InputDecoration(
-                          labelText: 'Fecha de Nacimiento (YYYY-MM-DD)',
-                          hintText: '1990-05-15',
-                          prefixIcon: Icon(Icons.calendar_today_outlined),
+                        readOnly: true,
+                        onTap: _pickBirthDate,
+                        decoration: InputDecoration(
+                          labelText: 'Fecha de Nacimiento',
+                          hintText: 'Seleccione su fecha en el calendario',
+                          prefixIcon: const Icon(Icons.calendar_today_outlined),
+                          suffixIcon: IconButton(
+                            icon: const Icon(Icons.date_range, color: AppTheme.primaryBlue),
+                            onPressed: _pickBirthDate,
+                            tooltip: 'Abrir calendario',
+                          ),
                         ),
                         validator: (value) {
-                          if (value == null ||
-                              !RegExp(
-                                r'^\d{4}-\d{2}-\d{2}$',
-                              ).hasMatch(value.trim())) {
-                            return 'Formato requerido: YYYY-MM-DD';
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Seleccione su fecha de nacimiento';
                           }
                           return null;
                         },

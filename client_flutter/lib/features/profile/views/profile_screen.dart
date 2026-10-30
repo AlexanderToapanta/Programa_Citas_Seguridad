@@ -176,21 +176,25 @@ class ProfileScreen extends ConsumerWidget {
         children: [
           Icon(icon, color: AppTheme.primaryBlue, size: 22),
           const SizedBox(width: 14),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
-              ),
-              Text(
-                value,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+                Text(
+                  value,
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
-              ),
-            ],
+                overflow: TextOverflow.ellipsis,
+                maxLines: 2,
+                ),
+              ],
+            ),
           ),
         ],
       ),

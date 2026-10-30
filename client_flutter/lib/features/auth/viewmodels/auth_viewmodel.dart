@@ -253,15 +253,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
       if (!mounted) return false;
 
-      // Por seguridad, no mostrar contraseñas
-      // temporales en la interfaz.
       state = state.copyWith(
         isLoading: false,
         errorMessage: null,
-        temporaryPasswordNotice:
-            'Registro completado correctamente. '
-            'Revise su correo electrónico para obtener '
-            'las instrucciones de acceso.',
+        temporaryPasswordNotice: tempPwd != null
+            ? 'Su contraseña temporal asignada es:\n\n' + tempPwd + '\n\n(Tiene 15 minutos de vigencia. Al ingresar se le pedirá cambiarla obligatoriamente).'
+            : 'Registro completado correctamente. Revise su correo electrónico para obtener las instrucciones de acceso.',
       );
 
       return true;

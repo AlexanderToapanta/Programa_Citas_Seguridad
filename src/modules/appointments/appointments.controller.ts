@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Query,
   Patch,
   Body,
   Param,
@@ -37,8 +38,8 @@ export class AppointmentsController {
   @ApiOperation({
     summary: 'Consultar citas propias o de familiares representados (Protección IDOR/BOLA aplicada)',
   })
-  async findMyAppointments(@CurrentUser() user: any) {
-    return this.appointmentsService.findMyAppointments(user);
+  async findMyAppointments(@CurrentUser() user: any, @Query('date') date?: string) {
+    return this.appointmentsService.findMyAppointments(user, date);
   }
 
   @Patch(':id/reschedule')

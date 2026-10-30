@@ -17,7 +17,10 @@ class ApiConstants {
 
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
-        return 'http://10.0.2.2:3000';
+        // 10.0.2.2 → emulador virtual (AVD) — alias interno hacia localhost del host
+        // 192.168.18.2 → dispositivo físico Android conectado por WiFi
+        // Si se conecta por emulador, usa 10.0.2.2; si es celular real, usa la IP de la PC.
+        return kIsWeb ? 'http://localhost:3000' : 'http://192.168.18.2:3000';
       default:
         return 'http://localhost:3000';
     }

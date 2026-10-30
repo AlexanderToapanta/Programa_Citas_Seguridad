@@ -31,7 +31,7 @@ export class AuthService {
   async register(dto: RegisterUserDto) {
     // 1. Validar cédula ecuatoriana válida
     if (!validateEcuadorianIdCard(dto.idCard)) {
-      throw new BadRequestException('El número de cédula ingresado no es válido según el algoritmo del Registro Civil');
+      throw new BadRequestException('Ingrese una cédula válida');
     }
 
     // 2. Verificar existencia previa

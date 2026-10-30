@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'app/router/app_router.dart';
@@ -22,6 +23,16 @@ class IessTurnosApp extends ConsumerWidget {
       title: 'IESS - Sistema de Turnos Médicos (Prototipo)',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('es', ''),
+        Locale('en', ''),
+      ],
+      locale: const Locale('es', ''),
       routerConfig: router,
     );
   }

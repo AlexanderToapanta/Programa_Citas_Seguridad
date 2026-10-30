@@ -237,7 +237,7 @@ export class AppointmentsService {
   /**
    * Consulta de citas con protección estricta contra IDOR/BOLA (R04) y mínimo privilegio (RF06)
    */
-  async findMyAppointments(currentUser: any) {
+  async findMyAppointments(currentUser: any, queryDate?: string) {
     const isDoctor = currentUser.roles.includes(RoleType.DOCTOR);
     const isStaff = currentUser.roles.some((r: string) =>
       [RoleType.ADMIN, RoleType.RECEPTIONIST, RoleType.SUPPORT].includes(r as any),
@@ -264,7 +264,14 @@ export class AppointmentsService {
 
     if (isStaff) {
       // Recepción / Admin / Soporte ven listado operativo sin expedientes clínicos (RF03, RF06)
+      let dateFilter: any = {};
+      if (queryDate) {
+        const start = new Date(queryDate + 'T00:00:00.000Z');
+        const end = new Date(queryDate + 'T23:59:59.999Z');
+        dateFilter = { scheduledAt: { gte: start, lte: end } };
+      }
       return this.prisma.appointment.findMany({
+        where: dateFilter,
         include: {
           specialty: true,
           facility: true,

@@ -138,7 +138,13 @@ async function main() {
   // Afiliado 1: Regular
   const affiliate1 = await prisma.user.upsert({
     where: { idCard: '1715897451' },
-    update: {},
+    update: {
+      passwordHash: defaultPasswordHash,
+      mustChangePassword: true,
+      failedLoginAttempts: 0,
+      lockoutUntil: null,
+      status: UserStatus.ACTIVE,
+    },
     create: {
       idCard: '1715897451',
       fullName: 'Juan Carlos Morales Torres',
