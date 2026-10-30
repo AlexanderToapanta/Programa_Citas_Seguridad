@@ -18,6 +18,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscurePassword = true;
 
   @override
+  void initState() {
+    super.initState();
+    // Limpiar errores previos (por ejemplo, errores provenientes del registro o navegación previa)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).clearMessages();
+    });
+  }
+
+  @override
   void dispose() {
     _idCardController.dispose();
     _passwordController.dispose();
@@ -88,11 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        'Prototipo Académico de Ingeniería de Seguridad',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
+
                       const SizedBox(height: 24),
 
                       // Mensaje de Error

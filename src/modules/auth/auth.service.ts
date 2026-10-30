@@ -34,15 +34,15 @@ export class AuthService {
       throw new BadRequestException('Ingrese una cédula válida');
     }
 
-    // 2. Verificar existencia previa
-    const existing = await this.prisma.user.findFirst({
-      where: {
-        OR: [{ idCard: dto.idCard }, { email: dto.email }],
-      },
+    // 2. Verificar que la cédula no esté ya registrada
+    // NOTA: el email NO es único — un padre/tutor puede compartir su correo
+    // con los registros de sus hijos menores de edad.
+    const existing = await this.prisma.user.findUnique({
+      where: { idCard: dto.idCard },
     });
 
     if (existing) {
-      throw new BadRequestException('Ya existe un usuario registrado con esta cédula o correo electrónico');
+      throw new BadRequestException('Ya existe un usuario con esa cédula');
     }
 
     // 2.1 Validar rango de edad: minimo 7 dias y maximo 100 anos
@@ -100,16 +100,12 @@ export class AuthService {
       },
     });
 
-    // Enviar notificación con credencial temporal (simulada)
-    await this.iessService.sendAdministrativeNotification(
-      { email: user.email, phone: user.phoneNumber },
-      {
-        patientName: user.fullName,
-        appointmentDate: 'N/A',
-        facilityName: 'Canal Digital IESS',
-        doctorName: 'Sistema de Seguridad',
-        action: 'CONFIRMED',
-      },
+    // Enviar notificación con la contraseña temporal por correo al afiliado (RF05)
+    await this.iessService.sendTemporaryCredentials(
+      user.email,
+      user.fullName,
+      tempPassword,
+      15,
     );
 
     return {
@@ -306,6 +302,14 @@ export class AuthService {
         },
       },
     });
+
+    // Enviar notificación con la nueva credencial temporal por correo (RF05)
+    await this.iessService.sendTemporaryCredentials(
+      user.email,
+      user.fullName,
+      tempPassword,
+      15,
+    );
 
     return {
       message: 'Si la cédula se encuentra registrada, se enviará una credencial temporal a su correo de contacto.',

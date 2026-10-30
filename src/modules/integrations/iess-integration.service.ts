@@ -1,5 +1,6 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MailerService } from './mailer.service';
 
 export interface AffiliateValidationResult {
   isAffiliated: boolean;
@@ -23,7 +24,10 @@ export class IessIntegrationService {
   private readonly logger = new Logger(IessIntegrationService.name);
   private failureRate: number;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private mailerService: MailerService,
+  ) {
     this.failureRate = parseFloat(this.configService.get<string>('IESS_MOCK_FAILURE_RATE') || '0.0');
   }
 
@@ -97,18 +101,50 @@ export class IessIntegrationService {
   }
 
   /**
-   * Simulación de notificación administrativa al afiliado (RF07 / R11)
-   * Sin datos clínicos sensibles ni números de cédula expuestos
+   * Envía una notificación administrativa real al afiliado vía Nodemailer / Gmail SMTP (RF07 / R11).
+   * No incluye datos clínicos ni número de cédula.
    */
   async sendAdministrativeNotification(
     recipientContact: { email: string; phone?: string },
     details: { patientName: string; appointmentDate: string; facilityName: string; doctorName: string; action: 'CONFIRMED' | 'CANCELLED' | 'RESCHEDULED' },
   ): Promise<boolean> {
     this.logger.log(
-      `[MOCK_NOTIFICATION] Enviando aviso administrativo por correo a ${recipientContact.email} y SMS: ${details.action} para fecha ${details.appointmentDate}`,
+      `[NOTIFICATION] Enviando aviso administrativo por correo a ${recipientContact.email} — acción: ${details.action}`,
     );
-    // En producción se conectaría al gateway SMTP/SMS institucional
-    return true;
+
+    const sent = await this.mailerService.sendAppointmentNotification(
+      recipientContact.email,
+      details,
+    );
+
+    if (!sent) {
+      this.logger.warn(
+        `[NOTIFICATION] Fallo al enviar correo a ${recipientContact.email}. La operación de cita continuará.`,
+      );
+    }
+
+    return sent;
+  }
+
+  /**
+   * Envía las credenciales temporales por correo electrónico
+   */
+  async sendTemporaryCredentials(
+    email: string,
+    fullName: string,
+    temporaryPassword: string,
+    expiresInMinutes: number = 15,
+  ): Promise<boolean> {
+    this.logger.log(
+      `[NOTIFICATION] Enviando contraseña temporal por correo a ${email}`,
+    );
+
+    return this.mailerService.sendTemporaryPasswordNotification(
+      email,
+      fullName,
+      temporaryPassword,
+      expiresInMinutes,
+    );
   }
 }
 

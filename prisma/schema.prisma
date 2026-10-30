@@ -48,7 +48,7 @@ model User {
   idCard                String        @unique @map("id_card") // Cédula ecuatoriana (10 dígitos)
   fullName              String        @map("full_name")
   birthDate             DateTime      @map("birth_date")
-  email                 String        @unique
+  email                 String        // Correo compartido permitido (ej: padre registra a hijo menor de edad)
   phoneNumber           String        @map("phone_number")
   passwordHash          String        @map("password_hash") // Argon2id hash
   mustChangePassword    Boolean       @default(true) @map("must_change_password")

@@ -23,6 +23,15 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   DateTime? _selectedBirthDate;
 
   @override
+  void initState() {
+    super.initState();
+    // Limpiar errores o estados previos al ingresar al registro
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(authProvider.notifier).clearMessages();
+    });
+  }
+
+  @override
   void dispose() {
     _idCardController.dispose();
     _fullNameController.dispose();
