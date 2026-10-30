@@ -1,0 +1,280 @@
+// Prisma schema para el Sistema de Turnos IESS (Prototipo Académico - Etapa 1)
+// Cumplimiento con LOPDP Ecuador y principios de minimización de datos (RF01 - RF11)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleType {
+  AFFILIATE       // Afiliado: gestiona sus propias citas
+  REPRESENTATIVE  // Familiar autorizado: gestiona citas de terceros bajo autorización
+  RECEPTIONIST    // Recepción: asiste presencialmente y gestiona turnos
+  DOCTOR          // Médico: consulta turnos de sus pacientes asignados
+  ADMIN           // Administrador: gestiona centros, horarios, especialidades
+  SUPPORT         // Soporte: consultas operativas y técnicas sin acceso a datos clínicos
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum AppointmentStatus {
+  SCHEDULED       // Agendada
+  RESCHEDULED     // Reprogramada
+  CANCELLED       // Cancelada por el afiliado o institución
+  COMPLETED       // Atendida
+  NO_SHOW         // Inasistencia injustificada
+}
+
+enum AuthorizationStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  EXPIRED
+}
+
+// -------------------------------------------------------------
+// USUARIOS Y SEGURIDAD (RF02, RF05, RF06)
+// -------------------------------------------------------------
+model User {
+  id                    String        @id @default(uuid())
+  idCard                String        @unique @map("id_card") // Cédula ecuatoriana (10 dígitos)
+  fullName              String        @map("full_name")
+  birthDate             DateTime      @map("birth_date")
+  email                 String        @unique
+  phoneNumber           String        @map("phone_number")
+  passwordHash          String        @map("password_hash") // Argon2id hash
+  mustChangePassword    Boolean       @default(true) @map("must_change_password")
+  failedLoginAttempts   Int           @default(0) @map("failed_login_attempts")
+  lockoutUntil          DateTime?     @map("lockout_until")
+  status                UserStatus    @default(ACTIVE)
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  roles                 UserRole[]
+  temporaryCredentials  TemporaryCredential[]
+  revokedTokens         RevokedToken[]
+  
+  // Relaciones de citas
+  appointments          Appointment[] @relation("AffiliateAppointments")
+  
+  // Relaciones de representación familiar (RF04)
+  representedAuthorizations FamilyAuthorization[] @relation("PrincipalUser") // Autorizaciones donde es el titular
+  delegateAuthorizations    FamilyAuthorization[] @relation("AuthorizedRepresentative") // Autorizaciones donde actúa como familiar
+  
+  // Registros de auditoría provocados
+  auditLogs             AuditLog[]
+
+  // Si el usuario es médico (opcional)
+  doctorProfile         Doctor?
+
+  @@index([idCard])
+  @@index([email])
+  @@map("users")
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  name        RoleType   @unique
+  description String
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// Credenciales temporales aleatorias de un solo uso con caducidad (RF05: 15 min)
+model TemporaryCredential {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  tokenHash   String   @map("token_hash")
+  expiresAt   DateTime @map("expires_at")
+  used        Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("temporary_credentials")
+}
+
+// Revocación de tokens JWT para logout forzoso o cierre de sesión
+model RevokedToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  revokedAt DateTime @default(now()) @map("revoked_at")
+  expiresAt DateTime @map("expires_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@map("revoked_tokens")
+}
+
+// -------------------------------------------------------------
+// CATÁLOGOS INSTITUCIONALES (RF01)
+// -------------------------------------------------------------
+model Specialty {
+  id               String        @id @default(uuid())
+  code             String        @unique // Ej: MED-GEN, CAR-001, PED-002
+  name             String
+  description      String
+  requiresReferral Boolean       @default(false) @map("requires_referral") // Validación de derivación médica
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  doctors          Doctor[]
+  appointments     Appointment[]
+
+  @@map("specialties")
+}
+
+model Facility {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String   // Ej: Hospital General San Francisco, Centro de Salud Tipo B
+  address   String
+  city      String
+  phone     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  doctors   Doctor[]
+  appointments Appointment[]
+
+  @@map("facilities")
+}
+
+model Doctor {
+  id           String      @id @default(uuid())
+  userId       String      @unique @map("user_id") // Enlace al usuario con rol DOCTOR
+  licenseNumber String     @unique @map("license_number") // Registro Senescyt / MSP
+  specialtyId  String      @map("specialty_id")
+  facilityId   String      @map("facility_id")
+
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  specialty    Specialty   @relation(fields: [specialtyId], references: [id])
+  facility     Facility    @relation(fields: [facilityId], references: [id])
+  slots        AppointmentSlot[]
+  appointments Appointment[]
+
+  @@map("doctors")
+}
+
+// -------------------------------------------------------------
+// DISPONIBILIDAD Y CUPOS (RF01, R07 - Prevención de Doble Reserva)
+// -------------------------------------------------------------
+model AppointmentSlot {
+  id          String       @id @default(uuid())
+  doctorId    String       @map("doctor_id")
+  date        DateTime     @db.Date
+  startTime   DateTime     @map("start_time")
+  endTime     DateTime     @map("end_time")
+  isAvailable Boolean      @default(true) @map("is_available")
+  version     Int          @default(0) // Optimistic locking
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  doctor      Doctor       @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  appointment Appointment?
+
+  // Restricción única para que un médico no tenga dos slots en el mismo horario
+  @@unique([doctorId, date, startTime], name: "unique_doctor_slot")
+  @@index([doctorId, date, isAvailable])
+  @@map("appointment_slots")
+}
+
+// -------------------------------------------------------------
+// CITAS MÉDICAS Y REGLAS DE NEGOCIO (RF01, RF03, R04, R07)
+// -------------------------------------------------------------
+model Appointment {
+  id                  String            @id @default(uuid())
+  affiliateId         String            @map("affiliate_id")
+  bookedByUserId      String            @map("booked_by_user_id") // Quien realizó la acción (titular o familiar)
+  specialtyId         String            @map("specialty_id")
+  facilityId          String            @map("facility_id")
+  doctorId            String            @map("doctor_id")
+  slotId              String            @unique @map("slot_id") // Garantiza 1 sola cita por slot físico
+  scheduledAt         DateTime          @map("scheduled_at")
+  status              AppointmentStatus @default(SCHEDULED)
+  cancellationReason  String?           @map("cancellation_reason")
+  rescheduledFromId   String?           @unique @map("rescheduled_from_id")
+  
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  affiliate           User              @relation("AffiliateAppointments", fields: [affiliateId], references: [id])
+  specialty           Specialty         @relation(fields: [specialtyId], references: [id])
+  facility            Facility          @relation(fields: [facilityId], references: [id])
+  doctor              Doctor            @relation(fields: [doctorId], references: [id])
+  slot                AppointmentSlot   @relation(fields: [slotId], references: [id])
+  previousAppointment Appointment?      @relation("RescheduledHistory", fields: [rescheduledFromId], references: [id])
+  rescheduledTo       Appointment?      @relation("RescheduledHistory")
+
+  @@index([affiliateId, status])
+  @@index([doctorId, scheduledAt])
+  @@map("appointments")
+}
+
+// -------------------------------------------------------------
+// AUTORIZACIONES FAMILIARES (RF04 - Gestión de Terceros)
+// -------------------------------------------------------------
+model FamilyAuthorization {
+  id                  String              @id @default(uuid())
+  principalUserId     String              @map("principal_user_id") // Titular que autoriza o menor tutelado
+  representativeUserId String             @map("representative_user_id") // Familiar autorizado
+  relationship        String              // HIJO, PADRE, CONYUGE, TUTOR_LEGAL
+  verificationMethod  String              @map("verification_method") // CODIGO_DACTILAR, OTP_CONTACTO, TUTORIA_ASISTIDA
+  verificationProof   String?             @map("verification_proof") // Hash o referencia de comprobación
+  status              AuthorizationStatus @default(ACTIVE)
+  validUntil          DateTime            @map("valid_until")
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
+
+  principal           User                @relation("PrincipalUser", fields: [principalUserId], references: [id], onDelete: Cascade)
+  representative      User                @relation("AuthorizedRepresentative", fields: [representativeUserId], references: [id], onDelete: Cascade)
+
+  @@unique([principalUserId, representativeUserId])
+  @@index([representativeUserId, status])
+  @@map("family_authorizations")
+}
+
+// -------------------------------------------------------------
+// REGISTRO DE AUDITORÍA (RF09, R09 - Cero contraseñas ni tokens)
+// -------------------------------------------------------------
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  action      String   // LOGIN, FAILED_LOGIN, CREATE_APPOINTMENT, RESCHEDULE, CANCEL, PASSWORD_CHANGE, etc.
+  resource    String   // APPOINTMENT, USER, AUTHORIZATION, AUTH
+  resourceId  String?  @map("resource_id")
+  ipAddress   String   @map("ip_address")
+  userAgent   String?  @map("user_agent")
+  statusCode  Int      @map("status_code")
+  metadata    Json?    // Sanitizado sin secretos ni tokens
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
+
